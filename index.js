@@ -2,7 +2,7 @@
 const http = require('http'), fs = require('fs'), path = require('path');
 const { WebSocketServer } = require('ws');
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 80;
 const server = http.createServer((req, res) => {
   fs.readFile(path.join(__dirname, 'taxi.html'), (err, data) => {
     if (err){ res.writeHead(500); return res.end('Falta taxi.html junto a server.js'); }
