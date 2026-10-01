@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Taxi</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#0b1220;color:#e2e8f0}
+#map{position:absolute;inset:0;z-index:1}
+.hide{display:none!important}
+.sr{position:absolute;left:-9999px}
+button,input{font:inherit}
+button,a.b{display:block;border:0;border-radius:12px;padding:13px;min-height:46px;font-weight:600;cursor:pointer;background:#16233c;color:#e2e8f0;text-decoration:none;text-align:center}
+button:hover,a.b:hover{background:#1e2f4d}
+:focus-visible{outline:3px solid #38bdf8;outline-offset:2px}
+.main{background:#facc15!important;color:#0b1220!important}
+.ok{background:#22c55e!important;color:#0b1220!important}
+.danger{background:#7f1d1d!important}
+input{width:100%;padding:14px;border-radius:10px;border:1px solid #253552;background:#111c31;color:#e2e8f0}
+#welcome{position:absolute;inset:0;z-index:3000;background:#0b1220;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{width:100%;max-width:380px;display:flex;flex-direction:column;gap:12px}
+.card h1{font-size:28px;text-align:center}
+.card p{color:#94a3b8;text-align:center}
+.link{background:none!important;color:#94a3b8;font-weight:400}
+.bar{position:absolute;z-index:1000;top:calc(12px + env(safe-area-inset-top,0px));right:12px;display:flex;flex-direction:column;gap:8px}
+.bar button{min-width:46px;padding:8px;background:rgba(11,18,32,.93);border:1px solid #1e293b;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+#sheet,#list{position:absolute;z-index:1000;left:12px;background:rgba(11,18,32,.96);border:1px solid #1e293b;border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px;overflow:auto;box-shadow:0 8px 28px rgba(0,0,0,.5);font-size:15px}
+#sheet{right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));max-width:440px;max-height:55vh}
+#list{top:calc(12px + env(safe-area-inset-top,0px));left:56px;right:70px;max-width:380px;max-height:50vh}
+body.big #sheet,body.big #list{font-size:19px}
+#net{position:absolute;z-index:1000;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);padding:6px 12px;border-radius:20px;font-size:12px;background:rgba(11,18,32,.93);border:1px solid #1e293b;white-space:nowrap}
+#net.ok{color:#22c55e}#net.off{color:#facc15}
+h2{font-size:1.15em}
+small,.muted{color:#94a3b8}
+#dyn{color:#38bdf8;font-weight:600}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row>*{flex:1;min-width:110px}
+#list button{display:flex;justify-content:space-between;gap:10px;text-align:left;font-weight:500}
+.dot{display:block;width:22px;height:22px;border-radius:50%;background:var(--c);border:3px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.5)}
+.dot.me{animation:p 1.8s infinite}
+.dot.sel{box-shadow:0 0 0 3px #fff,0 0 0 7px #2563eb}
+@keyframes p{0%{box-shadow:0 0 0 0 rgba(56,189,248,.8)}100%{box-shadow:0 0 0 18px rgba(56,189,248,0)}}
+@media (prefers-reduced-motion:reduce){.dot.me{animation:none}}
+</style>
+</head>
+<body>
+
+<div id="welcome">
+  <div class="card" id="stepRole">
+    <h1>🚕 Taxi</h1>
+    <p>¿Cómo vas a usar la app?</p>
+    <button class="ok" data-role="cliente">🙋 Soy cliente</button>
+    <button class="main" data-role="taxista">🚕 Soy taxista</button>
+  </div>
+  <div class="card hide" id="stepForm">
+    <h1 id="formTitle"></h1>
+    <input id="fNombre" placeholder="Nombre" autocomplete="name" aria-label="Nombre">
+    <input id="fTel" placeholder="Número de teléfono" type="tel" autocomplete="tel" aria-label="Número de teléfono">
+    <input id="fMat" placeholder="Matrícula" class="driver" autocapitalize="characters" aria-label="Matrícula">
+    <input id="fColor" placeholder="Color del vehículo" class="driver" aria-label="Color del vehículo">
+    <p id="err" class="hide" style="color:#f87171" role="alert">No se pudo cargar el mapa. Revisa tu conexión e inténtalo de nuevo.</p>
+    <button class="main" id="enter">Entrar</button>
+    <button class="link" id="back">← Volver</button>
+  </div>
+</div>
+
+<div id="map"></div>
+<div class="bar hide" id="bar">
+  <button id="fs" aria-label="Pantalla completa" title="Pantalla completa">⛶</button>
+  <button id="cMe" aria-label="Centrar el mapa en mi ubicación" title="Centrar en mí">📍</button>
+  <button id="cAll" aria-label="Ver todos en el mapa" title="Ver todos">🔍</button>
+  <button id="lst" aria-label="Abrir lista de cercanos" aria-expanded="false" title="Lista">☰</button>
+  <button id="big" aria-label="Texto grande" title="Texto grande">A+</button>
+  <button id="exit" aria-label="Salir y cambiar de rol" title="Salir">⏏</button>
+</div>
+<div id="list" class="hide" aria-label="Lista de cercanos"></div>
+<div id="sheet" class="hide"></div>
+<div id="net" class="off" aria-live="polite"></div>
+<div id="live" class="sr" role="status" aria-live="polite"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const CENTER = [23.1249, -82.3631], STALE = 10000, UP = 'tm:u:', TP = 'tm:t:';
+
+/* ---------- Leaflet con CDN de respaldo ---------- */
+const CDNS = [
+  ['https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css','https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js'],
+  ['https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css','https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js'],
+  ['https://unpkg.com/leaflet@1.9.4/dist/leaflet.css','https://unpkg.com/leaflet@1.9.4/dist/leaflet.js']
+];
+const leafletReady = CDNS.reduce((p,[css,js]) => p.catch(() => new Promise((ok,no) => {
+  if (window.L) return ok();
+  const l = document.createElement('link'); l.rel='stylesheet'; l.href=css; document.head.appendChild(l);
+  const s = document.createElement('script'); s.src=js; s.onload=()=>window.L?ok():no(); s.onerror=no; document.head.appendChild(s);
+})), Promise.reject());
+function leafletFailed(){ $('welcome').classList.remove('hide'); $('stepRole').classList.add('hide'); $('stepForm').classList.remove('hide'); $('err').classList.remove('hide'); }
+
+/* ---------- Almacenamiento y sincronización ----------
+   Sincroniza pestañas del mismo navegador (localStorage). Para varios
+   dispositivos sustituye publish/readUsers/readTrips/saveTrip por tu backend. */
+const ss = {
+  get(k){ try{ return JSON.parse(sessionStorage.getItem(k)); }catch(e){ return null; } },
+  set(k,v){ try{ sessionStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+const lsLocal = {
+  get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem(k); }catch(e){} },
+  keys(p){ const o=[]; try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k.startsWith(p)) o.push(k); } }catch(e){} return o; }
+};
+/* Con servidor (server.js) todo pasa por WebSocket; sin servidor, solo entre pestañas del mismo navegador */
+let ws = null, online = false;
+const mem = new Map();
+const wsSend = m => { try{ ws.send(JSON.stringify(m)); }catch(e){} };
+const clone = v => JSON.parse(JSON.stringify(v));
+const ls = {
+  get(k){ return online ? (mem.has(k) ? clone(mem.get(k)) : null) : lsLocal.get(k); },
+  set(k,v){ if (!online) return lsLocal.set(k,v); mem.set(k, clone(v)); wsSend({t:'set', k, v}); },
+  del(k){ if (!online) return lsLocal.del(k); mem.delete(k); wsSend({t:'del', k}); },
+  keys(p){ return online ? [...mem.keys()].filter(k => k.startsWith(p)) : lsLocal.keys(p); }
+};
+const WS_URL = new URLSearchParams(location.search).get('server') ||
+  (location.protocol==='file:' ? '' : (location.protocol==='https:' ? 'wss://' : 'ws://') + location.host);
+function setNet(){
+  const n = $('net'); n.className = online ? 'ok' : 'off';
+  n.textContent = online ? '● En línea' : '● Sin servidor: solo esta pestaña';
+}
+function connect(){
+  setNet();
+  if (!WS_URL) return;
+  try{ ws = new WebSocket(WS_URL); }catch(e){ return; }
+  ws.onopen = () => { online = true; mem.clear(); setNet(); };
+  ws.onmessage = e => {
+    let m; try{ m = JSON.parse(e.data); }catch(x){ return; }
+    const put = (k,v,age) => { v.ts = Date.now() - (age||0); mem.set(k,v); }; // hora local de recepción
+    if (m.t==='all'){ mem.clear(); m.items.forEach(([k,v,age]) => put(k,v,age)); publish(); }
+    else if (m.t==='set') put(m.k, m.v);
+    else if (m.t==='del') mem.delete(m.k);
+    render();
+  };
+  ws.onclose = () => { online = false; setNet(); setTimeout(connect, 3000); };
+  ws.onerror = () => {};
+}
+const DONE = ['fin','cancelado','rechazado'];
+const isDone = t => DONE.includes(t.status);
+
+let me = ss.get('tm:me'), myPos=null, map=null, myMarker=null, line=null;
+let selId=null, followId=null, listOpen=false, sheetKey='', listKey='', lastSig='';
+let users={}, trips=[], busy=new Set();
+const markers = {};
+
+const publish = () => { if (me && myPos) ls.set(UP+me.id, {...me, lat:myPos.lat, lng:myPos.lng, ts:Date.now()}); };
+function readUsers(){
+  const o = {};
+  ls.keys(UP).forEach(k => { const u = ls.get(k); if(!u) return;
+    if (Date.now()-u.ts > STALE){ ls.del(k); return; }
+    if (u.id !== me.id) o[u.id] = u; });
+  return o;
+}
+function readTrips(){
+  const o = [];
+  ls.keys(TP).forEach(k => { const t = ls.get(k); if(!t) return; const age = Date.now()-t.ts;
+    if ((isDone(t) && age>7000) || (t.status==='propuesto' && age>90000) || age>1800000){ ls.del(k); return; }
+    o.push(t); });
+  return o;
+}
+const saveTrip = t => { t.ts = Date.now(); ls.set(TP+t.id, t); render(); };
+const myTrip = () => trips.filter(t => t.clientId===me.id || t.taxiId===me.id).sort((a,b)=>b.ts-a.ts)[0];
+
+/* ---------- Utilidades ---------- */
+function dist(a,b){
+  const r=Math.PI/180, x=(b.lat-a.lat)*r, y=(b.lng-a.lng)*r;
+  const s=Math.sin(x/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(y/2)**2;
+  return 2*6371000*Math.asin(Math.sqrt(s));
+}
+const fmt = m => m<1000 ? Math.round(m)+' m' : (m/1000).toFixed(2)+' km';
+const eta = m => Math.max(1, Math.round(m/500)); // ~30 km/h
+const esc = s => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ll = u => L.latLng(u.lat, u.lng);
+const icon = (c,cls='') => L.divIcon({className:'', html:`<span class="dot ${cls}" style="--c:${c}"></span>`, iconSize:[22,22], iconAnchor:[11,11]});
+const announce = t => { $('live').textContent = ''; setTimeout(()=>$('live').textContent=t, 50); };
+const detail = u => u.matricula ? `🚗 ${esc(u.matricula)} · ${esc(u.color)}` : '';
+
+/* ---------- Bienvenida ---------- */
+let role=null;
+document.querySelectorAll('[data-role]').forEach(b => b.onclick = () => {
+  role = b.dataset.role;
+  $('formTitle').textContent = role==='taxista' ? 'Datos del taxista' : 'Datos del cliente';
+  document.querySelectorAll('.driver').forEach(el => el.classList.toggle('hide', role!=='taxista'));
+  $('stepRole').classList.add('hide'); $('stepForm').classList.remove('hide'); $('fNombre').focus();
+});
+$('back').onclick = () => { $('stepForm').classList.add('hide'); $('stepRole').classList.remove('hide'); };
+$('enter').onclick = () => {
+  const v = id => $(id).value.trim();
+  const need = role==='taxista' ? ['fNombre','fTel','fMat','fColor'] : ['fNombre','fTel'];
+  const bad = need.find(id => !v(id)); if (bad){ $(bad).focus(); return; }
+  me = {id:'u'+Math.random().toString(36).slice(2,9), role, nombre:v('fNombre'), tel:v('fTel')};
+  if (role==='taxista'){ me.matricula=v('fMat').toUpperCase(); me.color=v('fColor'); }
+  ss.set('tm:me', me); goFullscreen(); leafletReady.then(start, leafletFailed);
+};
+
+/* ---------- Barra de herramientas ---------- */
+function goFullscreen(){ const e=document.documentElement; if(!document.fullscreenElement && e.requestFullscreen) e.requestFullscreen().catch(()=>{}); }
+$('fs').onclick = () => document.fullscreenElement ? document.exitFullscreen() : goFullscreen();
+$('cMe').onclick = () => myPos ? map.setView(myPos, Math.max(map.getZoom(),16)) : announce('Aún no hay ubicación');
+$('cAll').onclick = () => {
+  const pts = Object.values(users).map(ll); if (myPos) pts.push(myPos);
+  if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(.3), {maxZoom:17});
+};
+$('lst').onclick = () => {
+  listOpen = !listOpen; listKey='';
+  $('list').classList.toggle('hide', !listOpen); $('lst').setAttribute('aria-expanded', listOpen); render();
+};
+$('big').onclick = () => document.body.classList.toggle('big');
+$('exit').onclick = () => {
+  const t = me && myTrip(); if (t && !isDone(t)){ t.status='cancelado'; ls.set(TP+t.id, {...t, ts:Date.now()}); }
+  ls.del(UP+me.id); sessionStorage.removeItem('tm:me');
+  if (document.fullscreenElement) document.exitFullscreen(); location.reload();
+};
+addEventListener('pagehide', () => { if (me) ls.del(UP+me.id); });
+document.addEventListener('keydown', e => {
+  if (e.key!=='Escape' || !me) return;
+  if (listOpen) $('lst').click(); else if (selId){ selId=null; followId=null; render(); }
+});
+
+/* ---------- Inicio ---------- */
+function start(){
+  $('welcome').classList.add('hide');
+  ['bar','sheet'].forEach(id => $(id).classList.remove('hide'));
+  try{ navigator.wakeLock && navigator.wakeLock.request('screen').catch(()=>{}); }catch(e){}
+  map = L.map('map').setView(CENTER, 15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap'}).addTo(map);
+  map.on('click', () => { if (!hasGps) return; if (selId){ selId=null; followId=null; render(); } });
+  map.on('click', e => { if (!hasGps) setPos(e.latlng); });
+  map.on('dragstart', () => { if (followId){ followId=null; render(); } });
+
+  const noGps = () => { if(!myPos) announce('Sin GPS. Toca el mapa para marcar tu posición.'); };
+  if (navigator.geolocation) navigator.geolocation.watchPosition(
+    p => { hasGps=true; const first=!myPos; setPos(L.latLng(p.coords.latitude, p.coords.longitude)); if(first) map.setView(myPos,16); },
+    noGps, {enableHighAccuracy:true, maximumAge:5000, timeout:15000});
+  else noGps();
+
+  connect();
+  setInterval(() => { publish(); render(); }, 2000);
+  addEventListener('storage', e => { if (e.key && (e.key.startsWith(UP) || e.key.startsWith(TP))) render(); });
+  render();
+}
+let hasGps = false;
+function setPos(p){
+  myPos = p;
+  const c = me.role==='taxista' ? '#facc15' : '#38bdf8';
+  if (!myMarker) myMarker = L.marker(p, {icon:icon(c,'me'), zIndexOffset:1000, keyboard:false}).addTo(map);
+  else myMarker.setLatLng(p);
+  publish(); render();
+}
+
+/* ---------- Acciones de viaje ---------- */
+function selectUser(id){
+  const u = users[id]; if(!u) return;
+  selId = id; followId = null; listOpen = false;
+  $('list').classList.add('hide'); $('lst').setAttribute('aria-expanded', false);
+  map.setView(ll(u), Math.max(map.getZoom(),16)); announce('Seleccionado: '+u.nombre); render();
+}
+function propose(o){
+  if (myTrip() || busy.has(o.id)) return;
+  const mk = u => ({nombre:u.nombre, tel:u.tel, matricula:u.matricula, color:u.color});
+  const c = me.role==='cliente' ? me : o, t = me.role==='taxista' ? me : o;
+  selId = null;
+  saveTrip({id:'t'+Date.now().toString(36), clientId:c.id, taxiId:t.id, cliente:mk(c), taxi:mk(t), by:me.role, status:'propuesto'});
+}
+const setStatus = s => { const t = myTrip(); if (t){ t.status=s; saveTrip(t); } };
+const targetId = () => { const t = myTrip(); return t ? (me.role==='cliente' ? t.taxiId : t.clientId) : selId; };
+
+$('sheet').onclick = e => {
+  const b = e.target.closest('[data-a]'); if (!b) return;
+  const a = b.dataset.a, id = targetId(), u = users[id];
+  if (a==='center' && u) map.setView(ll(u), Math.max(map.getZoom(),16));
+  else if (a==='follow'){ followId = followId===id ? null : id; if (followId && u) map.setView(ll(u), Math.max(map.getZoom(),16)); }
+  else if (a==='close'){ selId=null; followId=null; }
+  else if (a==='propose' && u) propose(u);
+  else if (a==='accept') setStatus('aceptado');
+  else if (a==='reject') setStatus('rechazado');
+  else if (a==='cancel') setStatus('cancelado');
+  else if (a==='start')  setStatus('enviaje');
+  else if (a==='finish') setStatus('fin');
+  render();
+};
+$('list').onclick = e => { const b = e.target.closest('[data-id]'); if (b) selectUser(b.dataset.id); };
+
+/* ---------- Render ---------- */
+function tripTitle(t){
+  const mine = t.by === me.role, other = me.role==='cliente' ? t.taxi : t.cliente;
+  return ({
+    propuesto: mine ? `Esperando respuesta de ${other.nombre}…`
+      : (me.role==='taxista' ? `${other.nombre} te pide un viaje` : `${other.nombre} se ofrece a recogerte`),
+    aceptado: me.role==='cliente' ? 'Tu taxi va en camino' : 'Ve a recoger al cliente',
+    enviaje: 'Viaje en curso', fin: 'Viaje finalizado ✅', cancelado: 'Viaje cancelado', rechazado: 'Solicitud rechazada'
+  })[t.status];
+}
+const callBtn = u => `<a class="b" href="tel:${esc(u.tel)}">📞 Llamar</a>`;
+const followBtn = () => `<button data-a="follow" aria-pressed="${!!followId}">${followId ? '⏸ Dejar de seguir' : '📡 Seguir'}</button>`;
+
+function tripHtml(t){
+  const o = me.role==='cliente' ? t.taxi : t.cliente, live = !isDone(t), mine = t.by===me.role;
+  let acts = '';
+  if (t.status==='propuesto') acts = mine ? '<button class="danger" data-a="cancel">✕ Cancelar</button>'
+    : '<button class="ok" data-a="accept">✔ Aceptar</button><button class="danger" data-a="reject">✕ Rechazar</button>';
+  else if (t.status==='aceptado') acts = (me.role==='taxista' ? '<button class="ok" data-a="start">▶ Iniciar viaje</button>' : '') + '<button class="danger" data-a="cancel">✕ Cancelar</button>';
+  else if (t.status==='enviaje') acts = '<button class="ok" data-a="finish">🏁 Finalizar viaje</button>';
+  return `<h2>${tripTitle(t)}</h2>
+    <div><b>${esc(o.nombre)}</b> <span class="muted">${detail(o)}</span></div><div id="dyn"></div>
+    ${live ? `<div class="row">${callBtn(o)}<button data-a="center">🎯 Centrar</button>${followBtn()}</div>` : ''}
+    ${acts ? `<div class="row">${acts}</div>` : ''}`;
+}
+function cardHtml(u){
+  const taxi = me.role==='cliente', b = busy.has(u.id);
+  const action = b ? '<p class="muted">Ocupado en otro viaje.</p>'
+    : `<button class="main" data-a="propose">${taxi ? '🚕 Pedir este taxi' : '🙋 Ofrecerme a este cliente'}</button>`;
+  return `<h2>${taxi ? '🚕' : '🙋'} ${esc(u.nombre)}</h2>
+    <div class="muted">${detail(u)}${b ? ' · Ocupado' : ''}</div><div id="dyn"></div>
+    <div class="row">${callBtn(u)}<button data-a="center">🎯 Centrar</button>${followBtn()}</div>
+    <div class="row">${action}<button data-a="close">Cerrar</button></div>
+    ${taxi ? '' : '<small>Puedes llamarle o enviarle tu oferta; él decide si acepta.</small>'}`;
+}
+const distText = u => !u ? 'Sin señal de esta persona' : (myPos ? `📍 ${fmt(dist(myPos, ll(u)))} · ~${eta(dist(myPos, ll(u)))} min` : 'Esperando tu ubicación…');
+
+function render(){
+  if (!map || !me) return;
+  users = readUsers(); trips = readTrips();
+  busy = new Set();
+  trips.forEach(t => { if (t.status==='aceptado' || t.status==='enviaje'){ busy.add(t.taxiId); busy.add(t.clientId); } });
+  if (selId && !users[selId]) selId = null;
+  if (followId && !users[followId]) followId = null;
+
+  const t = myTrip();
+  const sig = t ? t.id+t.status : '';
+  if (sig !== lastSig){
+    lastSig = sig;
+    if (t){ announce(tripTitle(t)); if (t.status==='propuesto' && t.by!==me.role && navigator.vibrate) navigator.vibrate([200,100,200]); }
+  }
+
+  /* Marcadores */
+  const targets = Object.values(users).filter(u => u.role !== me.role);
+  const seen = new Set();
+  targets.forEach(u => {
+    seen.add(u.id);
+    const c = busy.has(u.id) ? '#94a3b8' : (u.role==='taxista' ? '#facc15' : '#22c55e');
+    const sg = c + (selId===u.id ? 's' : '');
+    let m = markers[u.id];
+    if (!m){
+      m = markers[u.id] = L.marker(ll(u), {icon:icon(c), title:u.nombre}).addTo(map).on('click', () => selectUser(u.id));
+      const el = m.getElement(); if (el) el.setAttribute('aria-label', `${u.role==='taxista'?'Taxi':'Cliente'} ${u.nombre}`);
+    }
+    m.setLatLng(ll(u));
+    if (m._sg !== sg){ m._sg = sg; m.setIcon(icon(c, selId===u.id ? 'sel' : '')); }
+  });
+  Object.keys(markers).forEach(id => { if (!seen.has(id)){ map.removeLayer(markers[id]); delete markers[id]; } });
+
+  /* Seguimiento y línea */
+  if (followId && users[followId]) map.panTo(ll(users[followId]), {animate:true});
+  if (line){ map.removeLayer(line); line = null; }
+  const free = targets.filter(u => !busy.has(u.id)).map(u => ({u, d: myPos ? dist(myPos, ll(u)) : Infinity})).sort((a,b) => a.d-b.d);
+  const tid = targetId(), dest = (tid && users[tid]) || (free[0] && free[0].d<Infinity ? free[0].u : null);
+  if (myPos && dest) line = L.polyline([myPos, ll(dest)], {color:'#2563eb', weight:4, dashArray:'10 6'}).addTo(map);
+
+  /* Panel inferior (se reconstruye solo si cambia la estructura) */
+  let key, html, dyn;
+  if (t){ key='t|'+t.id+t.status+followId; html=tripHtml(t); dyn=distText(users[tid]); }
+  else if (selId){ key='s|'+selId+followId+busy.has(selId); html=cardHtml(users[selId]); dyn=distText(users[selId]); }
+  else {
+    key='n'+me.role; html='<h2 id="dyn"></h2><small></small>';
+    const lbl = me.role==='cliente' ? 'Taxis libres' : 'Clientes esperando';
+    dyn = free.length ? `${lbl}: ${free.length}` : `${lbl}: 0`;
+  }
+  if (key !== sheetKey){
+    sheetKey = key; $('sheet').innerHTML = html;
+    if (key[0]==='n') $('sheet').querySelector('small').textContent = (free.length ? '' : 'Nadie conectado por ahora. ') + `Toca un ${me.role==='cliente'?'taxi':'cliente'} en el mapa o abre ☰ para ver la lista.`;
+  }
+  const d = $('dyn'); if (d) d.textContent = dyn + (key[0]==='n' && free[0] && free[0].d<Infinity ? ` · más cerca: ${fmt(free[0].d)}` : '');
+
+  /* Lista accesible */
+  if (listOpen){
+    const arr = targets.map(u => ({u, d: myPos ? dist(myPos, ll(u)) : null})).sort((a,b) => (a.d??0)-(b.d??0));
+    const lk = arr.map(x => x.u.id + busy.has(x.u.id)).join();
+    if (lk !== listKey){
+      listKey = lk;
+      $('list').innerHTML = arr.length
+        ? `<h2>${me.role==='cliente'?'Taxis':'Clientes'} cerca</h2>` + arr.map(({u}) =>
+            `<button data-id="${esc(u.id)}"><span>${esc(u.nombre)}${u.matricula?' · '+esc(u.matricula)+' '+esc(u.color):''}${busy.has(u.id)?' · Ocupado':''}</span><span id="ld-${esc(u.id)}"></span></button>`).join('')
+        : '<p class="muted">Nadie conectado por ahora.</p>';
+    }
+    arr.forEach(({u,d}) => { const s = $('ld-'+u.id); if (s) s.textContent = d==null ? '' : fmt(d); });
+  }
+}
+
+if (me) leafletReady.then(start, leafletFailed);
+</script>
+</body>
+</html>
