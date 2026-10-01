@@ -33,7 +33,7 @@ body.big #sheet,body.big #list{font-size:19px}
 #net.ok{color:#22c55e}#net.off{color:#facc15}
 h2{font-size:1.15em}
 #chatlog{max-height:140px;overflow:auto;display:flex;flex-direction:column;gap:6px}
-#chatlog:empty::before{content:'Escribe aquí para coordinar la recogida.';color:#94a3b8}
+#chatlog:empty::before{content:'escribe aquí para coordinar la recogida y el destino.';color:#94a3b8}
 .m{padding:8px 10px;border-radius:10px;background:#16233c;align-self:flex-start;max-width:85%;word-break:break-word}
 .m.me{align-self:flex-end;background:#1d4ed8}
 .chat button{flex:0 0 auto;min-width:0}
@@ -62,7 +62,7 @@ small,.muted{color:#94a3b8}
   <div class="card" id="stepRole">
     <h1>🚕 Taxi</h1>
     <p>¿Cómo vas a usar la app?</p>
-    <button class="ok" data-role="cliente">🙋 Soy cliente</button>
+    <button class="ok" data-role="cliente">🙋 Soy un cliente</button>
     <button class="main" data-role="taxista">🚕 Soy taxista</button>
   </div>
   <div class="card hide" id="stepForm">
@@ -136,7 +136,7 @@ const WS_URL = new URLSearchParams(location.search).get('server') ||
   (location.protocol==='file:' ? '' : (location.protocol==='https:' ? 'wss://' : 'ws://') + location.host);
 function setNet(){
   const n = $('net'); n.className = online ? 'ok' : 'off';
-  n.textContent = online ? '● En línea' : '● Sin servidor: solo esta pestaña';
+  n.textContent = online ? '● En línea' : '● Conectando al servidor';
 }
 function connect(){
   setNet();
@@ -363,12 +363,12 @@ function tripHtml(t){
 function cardHtml(u){
   const taxi = me.role==='cliente', b = busy.has(u.id);
   const action = b ? '<p class="muted">Ocupado en otro viaje.</p>'
-    : `<button class="main" data-a="propose">${taxi ? '🚕 Pedir este taxi' : '🙋 Ofrecerme a este cliente'}</button>`;
+    : `<button class="main" data-a="propose">${taxi ? '🚕 Pedir este taxi' : '🙋 Contactar a este cliente'}</button>`;
   return `<h2>${taxi ? '🚕' : '🙋'} ${esc(u.nombre)}</h2>
     <div class="muted">${detail(u)}${b ? ' · Ocupado' : ''}</div><div id="dyn"></div>
     <div class="row">${callBtn(u)}<button data-a="center">🎯 Centrar</button>${followBtn()}</div>
     <div class="row">${action}<button data-a="close">Cerrar</button></div>
-    ${taxi ? '' : '<small>Puedes llamarle o enviarle tu oferta; él decide si acepta.</small>'}`;
+    ${taxi ? '' : '<small>puedes llamarle o enviarle una oferta él decide si acepta.</small>'}`;
 }
 const distText = u => !u ? 'Sin señal de esta persona' : (myPos ? `📍 ${fmt(dist(myPos, ll(u)))} · ~${eta(dist(myPos, ll(u)))} min` : 'Esperando tu ubicación…');
 
@@ -441,14 +441,14 @@ function render(){
   else if (selId){ key='s|'+selId+followId+busy.has(selId); html=cardHtml(users[selId]); dyn=distText(users[selId]); }
   else {
     key='n'+me.role; html='<h2 id="dyn"></h2><small></small>';
-    const lbl = me.role==='cliente' ? 'Taxis libres' : 'Clientes esperando';
+    const lbl = me.role==='cliente' ? 'taxis libres' : 'clientes esperando';
     dyn = free.length ? `${lbl}: ${free.length}` : `${lbl}: 0`;
   }
   if (key !== sheetKey){
     const pi = $('chatIn'), draft = pi ? pi.value : '', foc = pi && document.activeElement === pi;
     sheetKey = key; chatSig = ''; $('sheet').innerHTML = html;
     const ni = $('chatIn'); if (ni){ ni.value = draft; if (foc) ni.focus(); }
-    if (key[0]==='n') $('sheet').querySelector('small').textContent = (free.length ? '' : 'Nadie conectado por ahora. ') + `Toca un ${me.role==='cliente'?'taxi':'cliente'} en el mapa o abre ☰ para ver la lista.`;
+    if (key[0]==='n') $('sheet').querySelector('small').textContent = (free.length ? '' : 'Nadie conectado por ahora. ') + `Elige un ${me.role==='cliente'?'taxi':'cliente'} en el mapa o usa ☰ para ver la lista.`;
   }
   const d = $('dyn'); if (d) d.textContent = dyn + (key[0]==='n' && free[0] && free[0].d<Infinity ? ` · más cerca: ${fmt(free[0].d)}` : '');
 
