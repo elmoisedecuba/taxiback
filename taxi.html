@@ -26,7 +26,7 @@ input{width:100%;padding:14px;border-radius:10px;border:1px solid #253552;backgr
 .bar{position:absolute;z-index:1000;top:calc(12px + env(safe-area-inset-top,0px));right:12px;display:flex;flex-direction:column;gap:8px}
 .bar button{min-width:46px;padding:8px;background:rgba(11,18,32,.93);border:1px solid #1e293b;box-shadow:0 4px 14px rgba(0,0,0,.4)}
 #sheet,#list{position:absolute;z-index:1000;left:12px;background:rgba(11,18,32,.96);border:1px solid #1e293b;border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px;overflow:auto;box-shadow:0 8px 28px rgba(0,0,0,.5);font-size:15px}
-#sheet{right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));max-width:440px;max-height:55vh}
+#sheet{right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px) + var(--kb,0px));max-width:440px;max-height:min(55vh, calc(var(--vvh,100vh) - 24px))}
 #list{top:calc(12px + env(safe-area-inset-top,0px));left:56px;right:70px;max-width:380px;max-height:50vh}
 body.big #sheet,body.big #list{font-size:19px}
 #net{position:absolute;z-index:1000;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);padding:6px 12px;border-radius:20px;font-size:12px;background:rgba(11,18,32,.93);border:1px solid #1e293b;white-space:nowrap}
@@ -37,6 +37,10 @@ h2{font-size:1.15em}
 .m{padding:8px 10px;border-radius:10px;background:#16233c;align-self:flex-start;max-width:85%;word-break:break-word}
 .m.me{align-self:flex-end;background:#1d4ed8}
 .chat button{flex:0 0 auto;min-width:0}
+#chatIn{font-size:16px}
+body.typing #sheet{height:min(calc(var(--vvh,100vh) - 24px), 420px);max-height:none}
+body.typing #sheet>:not(h2):not(#chatlog):not(.chat){display:none}
+body.typing #chatlog{flex:1 1 auto;max-height:none;min-height:60px}
 small,.muted{color:#94a3b8}
 #dyn{color:#38bdf8;font-weight:600}
 .row{display:flex;gap:8px;flex-wrap:wrap}
@@ -305,6 +309,25 @@ function sendMsg(){
 }
 $('sheet').addEventListener('keydown', e => { if (e.key==='Enter' && e.target.id==='chatIn'){ e.preventDefault(); sendMsg(); } });
 
+/* Móvil: con el teclado abierto el panel se coloca encima de él y solo se muestra el chat */
+function fitViewport(){
+  const vv = window.visualViewport; if (!vv) return;
+  const st = document.documentElement.style;
+  st.setProperty('--vvh', vv.height + 'px');
+  st.setProperty('--kb', Math.max(0, innerHeight - vv.height - vv.offsetTop) + 'px');
+}
+if (window.visualViewport){ visualViewport.addEventListener('resize', fitViewport); visualViewport.addEventListener('scroll', fitViewport); }
+$('sheet').addEventListener('focusin', e => {
+  if (e.target.id !== 'chatIn') return;
+  document.body.classList.add('typing');
+  setTimeout(() => { scrollTo(0,0); fitViewport(); const l = $('chatlog'); if (l) l.scrollTop = l.scrollHeight; }, 60);
+});
+$('sheet').addEventListener('focusout', () => setTimeout(() => {
+  if (document.activeElement && document.activeElement.id === 'chatIn') return; // sigue escribiendo (p. ej. tras pulsar Enviar)
+  document.body.classList.remove('typing'); setTimeout(fitViewport, 60);
+}, 200));
+fitViewport();
+
 /* ---------- Render ---------- */
 function tripTitle(t){
   const mine = t.by === me.role, other = me.role==='cliente' ? t.taxi : t.cliente;
@@ -437,7 +460,7 @@ function render(){
     const cs = msgs.length + '|' + (msgs.length ? msgs[msgs.length-1].text : '');
     if (cs !== chatSig){
       chatSig = cs;
-      log.innerHTML = msgs.map(m => `<div class="m${m.from===me.id?' me':''}"><b>${m.from===me.id?'Tú':esc(m.nombre)}:</b> ${esc(m.text)}</div>`).join('');
+      log.innerHTML = msgs.map(m => `<div class="m${m.from===me.id?' me':''}"><span class="sr">${m.from===me.id?'Tú':esc(m.nombre)}: </span>${esc(m.text)}</div>`).join('');
       log.scrollTop = log.scrollHeight;
     }
   }
