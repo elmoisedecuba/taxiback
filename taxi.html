@@ -32,6 +32,11 @@ body.big #sheet,body.big #list{font-size:19px}
 #net{position:absolute;z-index:1000;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);padding:6px 12px;border-radius:20px;font-size:12px;background:rgba(11,18,32,.93);border:1px solid #1e293b;white-space:nowrap}
 #net.ok{color:#22c55e}#net.off{color:#facc15}
 h2{font-size:1.15em}
+#chatlog{max-height:140px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+#chatlog:empty::before{content:'Escribe aquí para coordinar la recogida.';color:#94a3b8}
+.m{padding:8px 10px;border-radius:10px;background:#16233c;align-self:flex-start;max-width:85%;word-break:break-word}
+.m.me{align-self:flex-end;background:#1d4ed8}
+.chat button{flex:0 0 auto;min-width:0}
 small,.muted{color:#94a3b8}
 #dyn{color:#38bdf8;font-weight:600}
 .row{display:flex;gap:8px;flex-wrap:wrap}
@@ -81,7 +86,7 @@ small,.muted{color:#94a3b8}
 
 <script>
 const $ = id => document.getElementById(id);
-const CENTER = [23.1249, -82.3631], STALE = 10000, UP = 'tm:u:', TP = 'tm:t:';
+const CENTER = [23.1249, -82.3631], STALE = 10000, UP = 'tm:u:', TP = 'tm:t:', MP = 'tm:m:', KP = 'tm:k:', JUNTOS_M = 50; // JUNTOS_M: distancia máxima (m) para contar que van en el mismo coche
 
 /* ---------- Leaflet con CDN de respaldo ---------- */
 const CDNS = [
@@ -130,7 +135,7 @@ function connect(){
   setNet();
   if (!WS_URL) return;
   try{ ws = new WebSocket(WS_URL); }catch(e){ return; }
-  ws.onopen = () => { online = true; mem.clear(); setNet(); };
+  ws.onopen = () => { online = true; mem.clear(); setNet(); wsSend({t:'hi', id: me.id}); };
   ws.onmessage = e => {
     let m; try{ m = JSON.parse(e.data); }catch(x){ return; }
     const put = (k,v,age) => { v.ts = Date.now() - (age||0); mem.set(k,v); }; // hora local de recepción
@@ -146,7 +151,8 @@ const DONE = ['fin','cancelado','rechazado'];
 const isDone = t => DONE.includes(t.status);
 
 let me = ss.get('tm:me'), myPos=null, map=null, myMarker=null, line=null;
-let selId=null, followId=null, listOpen=false, sheetKey='', listKey='', lastSig='';
+let selId=null, followId=null, listOpen=false, sheetKey='', listKey='', lastSig='', chatSig='', chatTrip=null, lastInc=0, kmTrip=null, kmAnchor=null, kmVal=0, kmW=0, kmSaved=-1;
+const dismissed = new Set();
 let users={}, trips=[], busy=new Set();
 const markers = {};
 
@@ -161,12 +167,12 @@ function readUsers(){
 function readTrips(){
   const o = [];
   ls.keys(TP).forEach(k => { const t = ls.get(k); if(!t) return; const age = Date.now()-t.ts;
-    if ((isDone(t) && age>7000) || (t.status==='propuesto' && age>90000) || age>1800000){ ls.del(k); return; }
+    if ((isDone(t) && age>(t.status==='fin' ? 120000 : 7000)) || (t.status==='propuesto' && age>90000) || age>1800000){ ls.del(k); ls.keys(MP+t.id+':').forEach(x => ls.del(x)); ls.del(KP+t.id); return; }
     o.push(t); });
   return o;
 }
 const saveTrip = t => { t.ts = Date.now(); ls.set(TP+t.id, t); render(); };
-const myTrip = () => trips.filter(t => t.clientId===me.id || t.taxiId===me.id).sort((a,b)=>b.ts-a.ts)[0];
+const myTrip = () => trips.filter(t => (t.clientId===me.id || t.taxiId===me.id) && !dismissed.has(t.id)).sort((a,b)=>b.ts-a.ts)[0];
 
 /* ---------- Utilidades ---------- */
 function dist(a,b){
@@ -263,7 +269,7 @@ function selectUser(id){
   map.setView(ll(u), Math.max(map.getZoom(),16)); announce('Seleccionado: '+u.nombre); render();
 }
 function propose(o){
-  if (myTrip() || busy.has(o.id)) return;
+  const act = myTrip(); if ((act && !isDone(act)) || busy.has(o.id)) return;
   const mk = u => ({nombre:u.nombre, tel:u.tel, matricula:u.matricula, color:u.color});
   const c = me.role==='cliente' ? me : o, t = me.role==='taxista' ? me : o;
   selId = null;
@@ -282,11 +288,22 @@ $('sheet').onclick = e => {
   else if (a==='accept') setStatus('aceptado');
   else if (a==='reject') setStatus('rechazado');
   else if (a==='cancel') setStatus('cancelado');
-  else if (a==='start')  setStatus('enviaje');
   else if (a==='finish') setStatus('fin');
+  else if (a==='send') sendMsg();
+  else if (a==='dismiss'){ const tt = myTrip(); if (tt) dismissed.add(tt.id); }
   render();
 };
 $('list').onclick = e => { const b = e.target.closest('[data-id]'); if (b) selectUser(b.dataset.id); };
+
+/* ---------- Chat del viaje (mismo WebSocket; solo lo reciben los dos participantes) ---------- */
+function sendMsg(){
+  const t = myTrip(), inp = $('chatIn'); if (!t || isDone(t) || !inp) return;
+  const text = inp.value.trim().slice(0,300); if (!text) return;
+  const to = me.role==='cliente' ? t.taxiId : t.clientId;
+  ls.set(MP+t.id+':'+Math.random().toString(36).slice(2,8), {tid:t.id, from:me.id, to, nombre:me.nombre, text, ts:Date.now()});
+  inp.value = ''; render(); inp.focus();
+}
+$('sheet').addEventListener('keydown', e => { if (e.key==='Enter' && e.target.id==='chatIn'){ e.preventDefault(); sendMsg(); } });
 
 /* ---------- Render ---------- */
 function tripTitle(t){
@@ -295,23 +312,26 @@ function tripTitle(t){
     propuesto: mine ? `Esperando respuesta de ${other.nombre}…`
       : (me.role==='taxista' ? `${other.nombre} te pide un viaje` : `${other.nombre} se ofrece a recogerte`),
     aceptado: me.role==='cliente' ? 'Tu taxi va en camino' : 'Ve a recoger al cliente',
-    enviaje: 'Viaje en curso', fin: 'Viaje finalizado ✅', cancelado: 'Viaje cancelado', rechazado: 'Solicitud rechazada'
+    fin: 'Viaje finalizado ✅', cancelado: 'Viaje cancelado', rechazado: 'Solicitud rechazada'
   })[t.status];
 }
 const callBtn = u => `<a class="b" href="tel:${esc(u.tel)}">📞 Llamar</a>`;
 const followBtn = () => `<button data-a="follow" aria-pressed="${!!followId}">${followId ? '⏸ Dejar de seguir' : '📡 Seguir'}</button>`;
 
+const CHAT = `<div id="chatlog" role="log" aria-label="Chat del viaje" aria-live="off"></div>
+  <div class="row chat"><input id="chatIn" placeholder="Escribe un mensaje…" maxlength="300" autocomplete="off" aria-label="Mensaje"><button data-a="send">Enviar</button></div>`;
 function tripHtml(t){
   const o = me.role==='cliente' ? t.taxi : t.cliente, live = !isDone(t), mine = t.by===me.role;
   let acts = '';
   if (t.status==='propuesto') acts = mine ? '<button class="danger" data-a="cancel">✕ Cancelar</button>'
     : '<button class="ok" data-a="accept">✔ Aceptar</button><button class="danger" data-a="reject">✕ Rechazar</button>';
-  else if (t.status==='aceptado') acts = (me.role==='taxista' ? '<button class="ok" data-a="start">▶ Iniciar viaje</button>' : '') + '<button class="danger" data-a="cancel">✕ Cancelar</button>';
-  else if (t.status==='enviaje') acts = '<button class="ok" data-a="finish">🏁 Finalizar viaje</button>';
+  else if (t.status==='aceptado') acts = '<button class="ok" data-a="finish">🏁 Finalizar viaje</button><button class="danger" data-a="cancel">✕ Cancelar</button>';
+  else acts = '<button data-a="dismiss">Cerrar</button>';
   return `<h2>${tripTitle(t)}</h2>
-    <div><b>${esc(o.nombre)}</b> <span class="muted">${detail(o)}</span></div><div id="dyn"></div>
+    <div><b>${esc(o.nombre)}</b> <span class="muted">${detail(o)}</span></div><div id="dyn"></div>${t.status==='aceptado' || t.status==='fin' ? '<div id="km" style="font-weight:600"></div>' : ''}
     ${live ? `<div class="row">${callBtn(o)}<button data-a="center">🎯 Centrar</button>${followBtn()}</div>` : ''}
-    ${acts ? `<div class="row">${acts}</div>` : ''}`;
+    ${acts ? `<div class="row">${acts}</div>` : ''}
+    ${live ? CHAT : ''}`;
 }
 function cardHtml(u){
   const taxi = me.role==='cliente', b = busy.has(u.id);
@@ -325,11 +345,22 @@ function cardHtml(u){
 }
 const distText = u => !u ? 'Sin señal de esta persona' : (myPos ? `📍 ${fmt(dist(myPos, ll(u)))} · ~${eta(dist(myPos, ll(u)))} min` : 'Esperando tu ubicación…');
 
+/* Km juntos: solo suma mientras taxista y cliente están a menos de JUNTOS_M metros.
+   Ignora el ruido del GPS (cuenta cada 10 m) y lo guarda en 'tm:k:<viaje>' para que lo vea el cliente. */
+function trackKm(t){
+  if (kmTrip !== t.id){ kmTrip = t.id; kmAnchor = null; const sv = ls.get(KP+t.id); kmVal = sv ? sv.km : 0; kmSaved = kmVal; }
+  const cl = users[t.clientId];
+  if (!myPos || !cl || dist(myPos, ll(cl)) > JUNTOS_M){ kmAnchor = null; return; }
+  if (!kmAnchor){ kmAnchor = myPos; return; }
+  const step = dist(kmAnchor, myPos);
+  if (step >= 10){ if (step < 500) kmVal += step; kmAnchor = myPos; } // >500 m de golpe = salto de GPS
+  if (kmVal !== kmSaved && Date.now()-kmW > 1500){ ls.set(KP+t.id, {km:kmVal, ts:Date.now()}); kmSaved = kmVal; kmW = Date.now(); }
+}
 function render(){
   if (!map || !me) return;
   users = readUsers(); trips = readTrips();
   busy = new Set();
-  trips.forEach(t => { if (t.status==='aceptado' || t.status==='enviaje'){ busy.add(t.taxiId); busy.add(t.clientId); } });
+  trips.forEach(t => { if (t.status==='aceptado'){ busy.add(t.taxiId); busy.add(t.clientId); } });
   if (selId && !users[selId]) selId = null;
   if (followId && !users[followId]) followId = null;
 
@@ -339,6 +370,19 @@ function render(){
     lastSig = sig;
     if (t){ announce(tripTitle(t)); if (t.status==='propuesto' && t.by!==me.role && navigator.vibrate) navigator.vibrate([200,100,200]); }
   }
+
+  if (t && me.role==='taxista'){
+    if (t.status==='aceptado') trackKm(t);
+    else if (kmTrip===t.id && kmVal!==kmSaved){ ls.set(KP+t.id, {km:kmVal, ts:Date.now()}); kmSaved = kmVal; }
+  }
+
+  /* Chat: avisar de mensajes nuevos */
+  const msgs = t && !isDone(t) ? ls.keys(MP+t.id+':').map(k => ls.get(k)).filter(Boolean) : [];
+  if (!online) msgs.sort((a,b) => a.ts-b.ts);
+  const inc = msgs.filter(m => m.from!==me.id);
+  if (!t || t.id!==chatTrip){ chatTrip = t ? t.id : null; }
+  else if (inc.length > lastInc){ const m = inc[inc.length-1]; announce(`Mensaje de ${m.nombre}: ${m.text}`); if (navigator.vibrate) navigator.vibrate(120); }
+  lastInc = inc.length;
 
   /* Marcadores */
   const targets = Object.values(users).filter(u => u.role !== me.role);
@@ -374,10 +418,29 @@ function render(){
     dyn = free.length ? `${lbl}: ${free.length}` : `${lbl}: 0`;
   }
   if (key !== sheetKey){
-    sheetKey = key; $('sheet').innerHTML = html;
+    const pi = $('chatIn'), draft = pi ? pi.value : '', foc = pi && document.activeElement === pi;
+    sheetKey = key; chatSig = ''; $('sheet').innerHTML = html;
+    const ni = $('chatIn'); if (ni){ ni.value = draft; if (foc) ni.focus(); }
     if (key[0]==='n') $('sheet').querySelector('small').textContent = (free.length ? '' : 'Nadie conectado por ahora. ') + `Toca un ${me.role==='cliente'?'taxi':'cliente'} en el mapa o abre ☰ para ver la lista.`;
   }
   const d = $('dyn'); if (d) d.textContent = dyn + (key[0]==='n' && free[0] && free[0].d<Infinity ? ` · más cerca: ${fmt(free[0].d)}` : '');
+
+  const kmEl = $('km');
+  if (kmEl && t){
+    const sv = ls.get(KP+t.id), po = users[tid];
+    const m = (me.role==='taxista' && kmTrip===t.id) ? kmVal : (sv ? sv.km : 0);
+    const juntos = myPos && po && dist(myPos, ll(po)) <= JUNTOS_M;
+    kmEl.textContent = `🛣 Recorrido juntos: ${(m/1000).toFixed(2)} km` + (t.status==='aceptado' ? (juntos ? ' · viajando juntos' : ' · aún no están juntos') : '');
+  }
+  const log = $('chatlog');
+  if (log){
+    const cs = msgs.length + '|' + (msgs.length ? msgs[msgs.length-1].text : '');
+    if (cs !== chatSig){
+      chatSig = cs;
+      log.innerHTML = msgs.map(m => `<div class="m${m.from===me.id?' me':''}"><b>${m.from===me.id?'Tú':esc(m.nombre)}:</b> ${esc(m.text)}</div>`).join('');
+      log.scrollTop = log.scrollHeight;
+    }
+  }
 
   /* Lista accesible */
   if (listOpen){
